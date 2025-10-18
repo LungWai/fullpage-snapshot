@@ -1,0 +1,136 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Annotator (Standalone)</title>
+    <style>
+      :root { --bg: #0f1115; --panel: #171923; --text: #e6e8ee; --muted: #a3a8b8; --accent: #4f8cff; }
+      * { box-sizing: border-box; }
+      html, body { margin:0; padding:0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+      button, input, select { font: inherit; }
+      header.toolbar { position: sticky; top: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 6px; background: var(--panel); border-bottom: 1px solid #2a2f3a; z-index: 5; }
+      header.toolbar .group { display:flex; gap:6px; align-items:center; }
+      button { background:#232838; color:var(--text); border:1px solid #2f3444; padding:6px 8px; border-radius:8px; cursor:pointer; }
+      button.primary { background: var(--accent); border-color: transparent; color: white; }
+      label { display:flex; align-items:center; gap:4px; color: var(--muted); }
+      .batch-panel { padding: 6px 8px; border-bottom: 1px solid #2a2f3a; }
+      .batch-panel details { background:#121521; padding:8px; border-radius:8px; }
+      .batch-panel .grid { display:grid; grid-template-columns: repeat(4, minmax(100px, 1fr)); gap:6px; margin:6px 0; }
+      .stage { display:flex; gap:12px; padding:12px; align-items: flex-start; }
+      .dropzone { min-width: 220px; max-width: 220px; background:#121521; border:1px dashed #394055; border-radius:12px; padding:12px; }
+      .dropzone.over { background:#10131d; }
+      .thumbs { display:flex; flex-direction:column; gap:8px; margin-top:12px; max-height:70vh; overflow:auto; }
+      .thumb { border:1px solid #2a2f3a; background:#0e1018; padding:4px; border-radius:8px; display:block; }
+      .thumb.active { outline:2px solid var(--accent); }
+      .canvas { flex: 0 0 auto; background:#0b0d14; border:1px solid #2a2f3a; border-radius:12px; image-rendering: crisp-edges; }
+    </style>
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="group">
+        <button id="tool-rect-stroke" data-tool="rect-stroke" class="primary">Stroke Rectangle</button>
+        <button id="tool-rect-fill" data-tool="rect-fill">Filled Rectangle (Redact)</button>
+      </div>
+      <div class="group">
+        <label>Stroke width <input id="strokeWidth" type="number" value="4" min="1" max="64" /></label>
+        <label>Color <input id="color" type="color" value="#ff0000" /></label>
+        <label>Fill opacity <input id="fillOpacity" type="range" value="0.6" min="0" max="1" step="0.05" /></label>
+      </div>
+      <div class="group">
+        <label><input id="applyToAll" type="checkbox" /> Apply new shapes to all images</label>
+        <button id="planMode" title="Plan Mode: create on one snapshot, apply to all">Plan Mode</button>
+        <button id="undo">Undo</button>
+        <button id="clear">Clear</button>
+      </div>
+      <div class="group">
+        <button id="saveOne">Save current PNG</button>
+        <button id="saveAll">Save all PNGs</button>
+      </div>
+    </header>
+
+    <section class="batch-panel">
+      <details>
+        <summary>⚡ Batch Operations & Coordinates</summary>
+        <p>Normalized coordinates are measured from 0 to 1 relative to image width and height. This lets the same shape fit images of different sizes.</p>
+        <div class="grid">
+          <label>x (0–1) <input id="bx" type="number" step="0.001" min="0" max="1" value="0.1" /></label>
+          <label>y (0–1) <input id="by" type="number" step="0.001" min="0" max="1" value="0.1" /></label>
+          <label>w (0–1) <input id="bw" type="number" step="0.001" min="0" max="1" value="0.3" /></label>
+          <label>h (0–1) <input id="bh" type="number" step="0.001" min="0" max="1" value="0.15" /></label>
+          <label>Type
+            <select id="btype">
+              <option value="rect-stroke">Stroke Rectangle</option>
+              <option value="rect-fill">Filled Rectangle</option>
+            </select>
+          </label>
+        </div>
+        <button id="batchAdd">Add shape to ALL images</button>
+        <button id="batchPresetExport">Export actions JSON</button>
+        <input id="batchPresetImport" type="file" accept="application/json" />
+      </details>
+    </section>
+
+    <main id="stage" class="stage" tabindex="0">
+      <div id="dropzone" class="dropzone">
+        <p>Drop images here or paste from clipboard.</p>
+      </div>
+      <div id="thumbs" class="thumbs"></div>
+      <canvas id="canvas" class="canvas" aria-label="annotation canvas"></canvas>
+    </main>
+
+    <script>
+      /* Same editor core as the extension, minus chrome.storage capture loading */
+      (function(){
+        const qs = (s, r=document) => r.querySelector(s);
+        const qsa = (s, r=document) => Array.from(r.querySelectorAll(s));
+        const canvas = qs('#canvas');
+        const ctx = canvas.getContext('2d');
+        const thumbs = qs('#thumbs');
+        const dropzone = qs('#dropzone');
+        const strokeWidthEl = qs('#strokeWidth');
+        const colorEl = qs('#color');
+        const fillOpacityEl = qs('#fillOpacity');
+        const applyToAllEl = qs('#applyToAll');
+        const planModeBtn = qs('#planMode');
+        let planMode = false;
+        planModeBtn.addEventListener('click', () => {
+          planMode = !planMode;
+          planModeBtn.classList.toggle('primary', planMode);
+          canvas.style.cursor = planMode ? 'crosshair' : 'default';
+        });
+        const toolButtons = [qs('#tool-rect-stroke'), qs('#tool-rect-fill')];
+        let tool = 'rect-stroke';
+        toolButtons.forEach(b => b.addEventListener('click', () => { tool = b.dataset.tool; toolButtons.forEach(x => x.classList.toggle('primary', x === b)); }));
+        const state = { images: [], currentIndex: -1, history: [] };
+        function pickName(prefix='image'){ return `${prefix}-${Date.now()}.png`; }
+                function selectImage(index){ if(index<0||index>=state.images.length) return; state.currentIndex=index; const item=state.images[index]; resizeCanvas(item.width,item.height); redraw(); qsa('.thumb').forEach((el,i)=>el.classList.toggle('active', i===index)); }        function resizeCanvas(w,h){ canvas.width=w; canvas.height=h; const stageRect=qs('#stage').getBoundingClientRect(); const dropzoneWidth=dropzone.offsetWidth||220; const thumbsWidth=thumbs.offsetWidth||0; const gap=24; const availableWidth=Math.max(400,stageRect.width-dropzoneWidth-thumbsWidth-gap); const toolbarHeight=qs('header.toolbar')?.offsetHeight||60; const batchPanelHeight=qs('.batch-panel')?.offsetHeight||40; const availableHeight=Math.max(400,window.innerHeight-toolbarHeight-batchPanelHeight-80); const scale=Math.min(1,availableWidth/w,availableHeight/h); canvas.style.width=Math.round(w*scale)+'px'; canvas.style.height=Math.round(h*scale)+'px'; }
+        function drawImageBase(item){ ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(item.img,0,0,item.width,item.height); }
+        function drawShapes(item){ for(const s of item.shapes){ const x=Math.round(s.nx*item.width), y=Math.round(s.ny*item.height), w=Math.round(s.nw*item.width), h=Math.round(s.nh*item.height); if(s.type==='rect-fill'){ const [r,g,b]=hexToRgb(s.color); ctx.fillStyle=`rgba(${r},${g},${b},${s.fillOpacity})`; ctx.fillRect(x,y,w,h);} if(s.type==='rect-stroke'){ ctx.lineWidth=s.strokeWidth; ctx.strokeStyle=s.color; ctx.strokeRect(x+s.strokeWidth/2,y+s.strokeWidth/2,Math.max(0,w-s.strokeWidth),Math.max(0,h-s.strokeWidth)); } } }
+        function redraw(){ if(state.currentIndex===-1) return; const item=state.images[state.currentIndex]; drawImageBase(item); drawShapes(item); }
+        function hexToRgb(hex){ const m=/^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(hex); if(!m) return [255,0,0]; return [parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)]; }
+        function addThumb(item,index){ const el=document.createElement('button'); el.className='thumb'; el.title=item.name; const tn=document.createElement('canvas'); const tctx=tn.getContext('2d'); const maxW=200,maxH=140; const scale=Math.min(maxW/item.width, maxH/item.height, 1); tn.width=Math.max(1,Math.round(item.width*scale)); tn.height=Math.max(1,Math.round(item.height*scale)); tctx.drawImage(item.img,0,0,tn.width,tn.height); el.appendChild(tn); el.addEventListener('click',()=>selectImage(index)); thumbs.appendChild(el); }
+        async function addImageFromDataUrl(dataUrl,name){ const img=new Image(); img.src=dataUrl; await img.decode(); const item={ id: crypto.randomUUID(), name: name||pickName('snapshot'), img, width: img.naturalWidth, height: img.naturalHeight, shapes: [] }; state.images.push(item); addThumb(item, state.images.length-1); if(state.currentIndex===-1) selectImage(0); }
+        function recordAction(a){ state.history.push(a); }
+        function applyShapeTo(item,shape){ item.shapes.push({...shape}); }
+        function applyShape(shape){ if(state.currentIndex===-1) return; const applyAll = planMode || applyToAllEl.checked; const targets=applyAll? state.images : [state.images[state.currentIndex]]; targets.forEach(it=>applyShapeTo(it,shape)); recordAction({kind:'add-shape',shape,targets:applyAll?'all':'current',index:state.currentIndex}); redraw(); }
+        let drag=null; canvas.addEventListener('pointerdown',(e)=>{ if(state.currentIndex===-1) return; const r=canvas.getBoundingClientRect(); drag={startX:e.clientX-r.left,startY:e.clientY-r.top,curX:0,curY:0}; });
+        canvas.addEventListener('pointermove',(e)=>{ if(!drag||state.currentIndex===-1) return; const r=canvas.getBoundingClientRect(); drag.curX=e.clientX-r.left; drag.curY=e.clientY-r.top; redraw(); const item=state.images[state.currentIndex]; const x=Math.min(drag.startX,drag.curX), y=Math.min(drag.startY,drag.curY), w=Math.abs(drag.startX-drag.curX), h=Math.abs(drag.startY-drag.curY); const color= colorEl.value; const strokeWidth= Number(strokeWidthEl.value); const fillOpacity= Number(fillOpacityEl.value); if(tool==='rect-fill'){ const [rr,gg,bb]=hexToRgb(color); ctx.fillStyle=`rgba(${rr},${gg},${bb},${fillOpacity})`; ctx.fillRect(x,y,w,h);} else { ctx.lineWidth=strokeWidth; ctx.strokeStyle=color; ctx.strokeRect(x+strokeWidth/2, y+strokeWidth/2, Math.max(0,w-strokeWidth), Math.max(0,h-strokeWidth)); } });
+        canvas.addEventListener('pointerup',()=>{ if(!drag||state.currentIndex===-1) return; const item=state.images[state.currentIndex]; const x=Math.min(drag.startX,drag.curX), y=Math.min(drag.startY,drag.curY), w=Math.abs(drag.startX-drag.curX), h=Math.abs(drag.startY-drag.curY); drag=null; if(w<2||h<2){ redraw(); return; } const shape={ type: tool, color: colorEl.value, strokeWidth: Number(strokeWidthEl.value), fillOpacity: Number(fillOpacityEl.value), nx: clamp(x/item.width,0,1), ny: clamp(y/item.height,0,1), nw: clamp(w/item.width,0,1), nh: clamp(h/item.height,0,1) }; applyShape(shape); });
+        function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+        qs('#undo').addEventListener('click',()=>{ if(state.history.length===0)return; const last=state.history.pop(); if(last.kind==='add-shape'){ if(last.targets==='all'){ state.images.forEach(it=>it.shapes.pop()); } else { state.images[last.index].shapes.pop(); } redraw(); } });
+        qs('#clear').addEventListener('click',()=>{ if(state.currentIndex===-1) return; state.images[state.currentIndex].shapes=[]; redraw(); });
+        qs('#saveOne').addEventListener('click',()=>saveCurrent()); qs('#saveAll').addEventListener('click',()=>saveAll());
+        function download(dataUrl, filename){ const a=document.createElement('a'); a.href=dataUrl; a.download=filename; a.click(); }
+        function saveCurrent(){ if(state.currentIndex===-1) return; const item=state.images[state.currentIndex]; drawImageBase(item); drawShapes(item); const url=canvas.toDataURL('image/png'); download(url, item.name||pickName('annotated')); }
+        function saveAll(){ for(let i=0;i<state.images.length;i++){ state.currentIndex=i; redraw(); const item=state.images[i]; drawImageBase(item); drawShapes(item); const url=canvas.toDataURL('image/png'); download(url, item.name||pickName('annotated')); } }
+        qs('#batchAdd').addEventListener('click',()=>{ const nx=Number(qs('#bx').value); const ny=Number(qs('#by').value); const nw=Number(qs('#bw').value); const nh=Number(qs('#bh').value); const type=qs('#btype').value; const shape={type,color:colorEl.value,strokeWidth:Number(strokeWidthEl.value),fillOpacity:Number(fillOpacityEl.value),nx:clamp(nx,0,1),ny:clamp(ny,0,1),nw:clamp(nw,0,1),nh:clamp(nh,0,1)}; state.images.forEach(it=>applyShapeTo(it,shape)); recordAction({kind:'add-shape',shape,targets:'all',index:state.currentIndex}); redraw(); });
+        qs('#batchPresetExport').addEventListener('click',()=>{ const actions=state.images[state.currentIndex]?.shapes||[]; const blob=new Blob([JSON.stringify(actions,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='actions.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); });
+        qs('#batchPresetImport').addEventListener('change',async(e)=>{ const file=e.target.files?.[0]; if(!file)return; const txt=await file.text(); let shapes=[]; try{shapes=JSON.parse(txt);}catch{alert('Invalid JSON');return;} if(!Array.isArray(shapes)){alert('JSON must be an array of shapes');return;} shapes=shapes.filter(s=>['rect-stroke','rect-fill'].includes(s.type)&&typeof s.nx==='number'); state.images.forEach(it=>it.shapes.push(...shapes)); redraw(); });
+        function isImageFile(f){ return /image\/(png|jpeg|webp)/i.test(f.type) || /\.(png|jpg|jpeg|webp)$/i.test(f.name); }
+        ;['dragenter','dragover'].forEach(evt=>dropzone.addEventListener(evt,(e)=>{ e.preventDefault(); dropzone.classList.add('over'); }));
+        ;['dragleave','drop'].forEach(evt=>dropzone.addEventListener(evt,(e)=>{ e.preventDefault(); dropzone.classList.remove('over'); }));
+                dropzone.addEventListener('drop', async (e)=>{ const files=Array.from(e.dataTransfer.files).filter(isImageFile); for(const f of files){ const url=URL.createObjectURL(f); await addImageFromDataUrl(url, f.name.replace(/\s+/g,'_')); URL.revokeObjectURL(url); } });        window.addEventListener('paste', async (e)=>{ const items=Array.from(e.clipboardData.items); for(const it of items){ if(it.type.startsWith('image/')){ const blob=it.getAsFile(); const url=URL.createObjectURL(blob); await addImageFromDataUrl(url, pickName('pasted')); URL.revokeObjectURL(url); } } });        let resizeTimeout; window.addEventListener('resize',()=>{ clearTimeout(resizeTimeout); resizeTimeout=setTimeout(()=>{ if(state.currentIndex!==-1){ const item=state.images[state.currentIndex]; resizeCanvas(item.width,item.height); redraw(); }},150); });      })();
+    </script>
+  </body>
+</html> 

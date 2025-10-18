@@ -1,0 +1,257 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Snapshot</title>
+    <!-- Remove global dark theme styles for popup -->
+    <style>
+      /* Reset and light theme for popup */
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      
+      body {
+        width: 320px;
+        padding: 12px;
+        font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        background: #ffffff;
+        color: #333333;
+      }
+      
+      h1 {
+        font-size: 18px;
+        margin: 0 0 15px 0;
+        text-align: center;
+        color: #2c3e50;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+      
+      .main-actions { 
+        display: flex; 
+        flex-direction: column; 
+        gap: 10px; 
+        margin-bottom: 15px; 
+      }
+      
+      .main-actions button { 
+        padding: 10px 12px; 
+        font-size: 14px; 
+        font-weight: 600;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+      
+      #capture { 
+        background: #4CAF50; 
+        color: white; 
+      }
+      #capture:hover { 
+        background: #45a049; 
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+      }
+      
+      #openEditor { 
+        background: #2196F3; 
+        color: white; 
+      }
+      #openEditor:hover { 
+        background: #1976D2;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+      }
+      
+      .batch-dropdown {
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        overflow: hidden;
+        background: #fafafa;
+      }
+      
+      .batch-dropdown summary {
+        padding: 12px;
+        background: #f5f5f5;
+        cursor: pointer;
+        user-select: none;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #444;
+        transition: background 0.2s;
+      }
+      
+      .batch-dropdown summary:hover {
+        background: #eeeeee;
+      }
+      
+      .batch-dropdown[open] summary {
+        border-bottom: 1px solid #e0e0e0;
+        background: #eeeeee;
+      }
+      
+      .batch-content {
+        padding: 12px;
+        background: white;
+      }
+      
+      .tab-list { 
+        max-height: 250px; 
+        overflow-y: auto; 
+        margin: 10px 0;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        background: white;
+      }
+      
+      .tab-item { 
+        display: flex; 
+        align-items: center; 
+        padding: 10px; 
+        border-bottom: 1px solid #f0f0f0;
+        color: #333;
+        transition: background 0.2s;
+      }
+      
+      .tab-item:last-child { 
+        border-bottom: none; 
+      }
+      
+      .tab-item:hover { 
+        background: #f8f8f8; 
+      }
+      
+      .tab-item input[type="checkbox"] { 
+        margin-right: 10px;
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+      }
+      
+      .tab-title { 
+        flex: 1; 
+        font-size: 13px; 
+        white-space: nowrap; 
+        overflow: hidden; 
+        text-overflow: ellipsis;
+        color: #555;
+      }
+      
+      .batch-controls { 
+        display: flex; 
+        gap: 6px; 
+        margin-bottom: 10px; 
+      }
+      
+      .batch-controls button { 
+        flex: 1; 
+        font-size: 12px; 
+        padding: 8px; 
+        background: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        color: #555;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      
+      .batch-controls button:hover { 
+        background: #e8e8e8;
+        border-color: #ccc;
+      }
+      
+      #batchCapture { 
+        background: #4CAF50; 
+        color: white; 
+        font-weight: 600;
+        padding: 10px;
+        width: 100%;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      
+      #batchCapture:hover { 
+        background: #45a049;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
+      }
+      
+      #batchCapture:disabled { 
+        background: #cccccc;
+        color: #999;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+      
+      .hint { 
+        font-size: 12px; 
+        color: #777; 
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #e0e0e0;
+        text-align: center;
+        line-height: 1.5;
+      }
+      
+      .loading-message {
+        padding: 20px;
+        text-align: center;
+        color: #999;
+        font-style: italic;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>
+      <span>📸</span>
+      <span>Snapshot Tool</span>
+    </h1>
+    
+    <div class="main-actions">
+      <button id="capture">
+        <span>📸</span>
+        <span>Capture Current Page</span>
+      </button>
+      <button id="openEditor">
+        <span>✏️</span>
+        <span>Open Editor</span>
+      </button>
+    </div>
+    
+    <details class="batch-dropdown">
+      <summary>
+        <span>⚡</span>
+        <span>Batch Capture Multiple Tabs</span>
+      </summary>
+      <div class="batch-content">
+        <div class="batch-controls">
+          <button id="selectAll">Select All</button>
+          <button id="selectNone">Deselect All</button>
+        </div>
+        <div id="tabList" class="tab-list">
+          <div class="loading-message">
+            Loading tabs...
+          </div>
+        </div>
+        <button id="batchCapture">Capture Selected Tabs</button>
+      </div>
+    </details>
+    
+    <p class="hint">
+      💡 <strong>Tip:</strong> Use batch capture to screenshot and annotate multiple pages at once
+    </p>
+    
+    <script src="popup.js"></script>
+  </body>
+</html> 

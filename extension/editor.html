@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Annotator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="group">
+        <button id="mode-create" class="mode-btn primary" data-mode="create">✏️ Create Mode</button>
+        <button id="mode-drag" class="mode-btn" data-mode="drag">🤚 Drag Mode</button>
+        <span class="separator">|</span>
+        <button id="tool-rect-stroke" data-tool="rect-stroke" class="primary">Stroke Rectangle</button>
+        <button id="tool-rect-fill" data-tool="rect-fill">Filled Rectangle (Redact)</button>
+      </div>
+      <div class="group">
+        <label>Stroke width <input id="strokeWidth" type="number" value="4" min="1" max="64" /></label>
+        <label>Color <input id="color" type="color" value="#ff0000" /></label>
+        <label>Fill opacity <input id="fillOpacity" type="range" value="0.6" min="0" max="1" step="0.05" /></label>
+      </div>
+      <div class="group">
+        <label><input id="applyToAll" type="checkbox" /> Apply new shapes to all images</label>
+        <button id="undo">Undo</button>
+        <button id="clear">Clear</button>
+        <button id="deleteShape">🗑️ Delete Shape</button>
+      </div>
+      <div class="group">
+        <button id="saveOne">Save current PNG</button>
+        <button id="saveAll">Save all PNGs</button>
+      </div>
+    </header>
+
+    <section class="batch-panel">
+      <details id="batchPanel">
+        <summary>⚡ Batch Operations & Coordinates</summary>
+        <div class="batch-content">
+          <p>Normalized coordinates are measured from 0 to 1 relative to image width and height. This lets the same shape fit images of different sizes.</p>
+          <div class="grid">
+            <label>x (0–1) <input id="bx" type="number" step="0.001" min="0" max="1" value="0.1" /></label>
+            <label>y (0–1) <input id="by" type="number" step="0.001" min="0" max="1" value="0.1" /></label>
+            <label>w (0–1) <input id="bw" type="number" step="0.001" min="0" max="1" value="0.3" /></label>
+            <label>h (0–1) <input id="bh" type="number" step="0.001" min="0" max="1" value="0.15" /></label>
+            <label>Type
+              <select id="btype">
+                <option value="rect-stroke">Stroke Rectangle</option>
+                <option value="rect-fill">Filled Rectangle</option>
+              </select>
+            </label>
+          </div>
+          <button id="batchAdd">Add shape to ALL images</button>
+          <button id="batchPresetExport">Export actions JSON</button>
+          <input id="batchPresetImport" type="file" accept="application/json" />
+        </div>
+      </details>
+    </section>
+
+    <main id="stage" class="stage" tabindex="0">
+      <div id="dropzone" class="dropzone">
+        <p>Drop images here, or paste from clipboard. The latest captured page (if any) loads automatically.</p>
+        <p style="font-size: 12px; color: #666; margin-top: 10px;">
+          💡 <strong>Tips:</strong> 
+          <br>• <strong>Create Mode:</strong> Click and drag to create rectangles
+          <br>• <strong>Drag Mode:</strong> Click and drag shapes to move them
+          <br>• <strong>Delete:</strong> Select a shape in Drag Mode and click Delete Shape
+          <br>• Hold <kbd>Shift</kbd> for quick mode toggle
+        </p>
+      </div>
+      <div id="thumbs" class="thumbs"></div>
+      <canvas id="canvas" class="canvas" aria-label="annotation canvas"></canvas>
+    </main>
+
+    <script src="editor.js"></script>
+  </body>
+</html> 

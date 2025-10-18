@@ -1,0 +1,32 @@
+[
+  {
+    "type": "rect-fill",
+    "color": "#000000",
+    "strokeWidth": 4,
+    "fillOpacity": 1,
+    "nx": 0.05,
+    "ny": 0.02,
+    "nw": 0.25,
+    "nh": 0.08
+  },
+  {
+    "type": "rect-fill",
+    "color": "#000000",
+    "strokeWidth": 4,
+    "fillOpacity": 1,
+    "nx": 0.7,
+    "ny": 0.02,
+    "nw": 0.25,
+    "nh": 0.08
+  },
+  {
+    "type": "rect-stroke",
+    "color": "#ff0000",
+    "strokeWidth": 6,
+    "fillOpacity": 0.6,
+    "nx": 0.1,
+    "ny": 0.3,
+    "nw": 0.8,
+    "nh": 0.4
+  }
+] 
