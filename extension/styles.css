@@ -12,6 +12,9 @@ button.primary:hover { background: #5f9cff; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 label { display:flex; align-items:center; gap:4px; color: var(--muted); }
 
+/* Zoom controls */
+#zoomLevel { font-weight: 500; color: var(--accent); min-width: 50px; text-align: center; }
+
 /* Mode buttons */
 .mode-btn { min-width: 84px; font-weight: 500; }
 .mode-btn:not(.primary) { background: #1a1f2e; }
@@ -29,7 +32,7 @@ label { display:flex; align-items:center; gap:4px; color: var(--muted); }
 .batch-panel .batch-content { padding: 10px; }
 .batch-panel .grid { display:grid; grid-template-columns: repeat(4, minmax(100px, 1fr)); gap:6px; margin:6px 0; }
 
-.stage { display:flex; gap:12px; padding:12px; align-items: flex-start; }
+.stage { display:flex; gap:12px; padding:12px; align-items: flex-start; overflow: auto; }
 .dropzone { min-width: 220px; max-width: 220px; background:#121521; border:1px dashed #394055; border-radius:12px; padding:12px; }
 .dropzone.over { background:#10131d; }
 .thumbs { display:flex; flex-direction:column; gap:8px; margin-top:12px; max-height:70vh; overflow:auto; }

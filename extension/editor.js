@@ -35,12 +35,28 @@
   const state = {
     images: [], // { id, name, img, width, height, shapes: [ { type, color, strokeWidth, fillOpacity, nx, ny, nw, nh } ] }
     currentIndex: -1,
-    history: [] // stack of actions for undo
+    history: [], // stack of actions for undo
+    zoom: 1.0 // zoom scale: 1.0 = 100%, 1.5 = 150%, etc.
   };
 
   let selectedShapeIndex = -1; // Currently selected shape for editing/deletion
+  
+  const zoomLevels = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0];
+  const zoomLevelEl = qs('#zoomLevel');
 
-  function pickName(prefix='image') { return `${prefix}-${Date.now()}.png`; }
+  function formatTimestamp(ts = Date.now()) {
+    const d = new Date(ts);
+    const pad = (n) => String(n).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const mm = pad(d.getMonth() + 1);
+    const dd = pad(d.getDate());
+    const hh = pad(d.getHours());
+    const mi = pad(d.getMinutes());
+    const ss = pad(d.getSeconds());
+    return `${yyyy}${mm}${dd}-${hh}${mi}${ss}`;
+  }
+
+  function pickName(prefix='image') { return `${formatTimestamp()}-${prefix}.png`; }
 
   function selectImage(index) {
     if (index < 0 || index >= state.images.length) return;
@@ -71,8 +87,9 @@
     const batchPanelHeight = qs('.batch-panel')?.offsetHeight || 40;
     const availableHeight = Math.max(400, window.innerHeight - toolbarHeight - batchPanelHeight - 80);
     
-    // Scale to fit available space, but never upscale
-    const scale = Math.min(1, availableWidth / w, availableHeight / h);
+    // Scale to fit available space, but never upscale (unless zoom > 1)
+    const baseFitScale = Math.min(1, availableWidth / w, availableHeight / h);
+    const scale = baseFitScale * state.zoom;
     const cssW = Math.round(w * scale);
     const cssH = Math.round(h * scale);
     
@@ -367,6 +384,73 @@
     }
   });
 
+  // Zoom functions
+  function updateZoomLevel() {
+    zoomLevelEl.textContent = Math.round(state.zoom * 100) + '%';
+  }
+
+  function setZoom(newZoom) {
+    state.zoom = Math.max(0.1, Math.min(10, newZoom)); // Clamp between 10% and 1000%
+    updateZoomLevel();
+    if (state.currentIndex !== -1) {
+      const item = state.images[state.currentIndex];
+      resizeCanvas(item.width, item.height);
+      redraw();
+    }
+  }
+
+  function zoomIn() {
+    // Find next higher zoom level, or increase by 25%
+    const nextLevel = zoomLevels.find(z => z > state.zoom);
+    setZoom(nextLevel || state.zoom * 1.25);
+  }
+
+  function zoomOut() {
+    // Find next lower zoom level, or decrease by 25%
+    const nextLevel = [...zoomLevels].reverse().find(z => z < state.zoom);
+    setZoom(nextLevel || state.zoom * 0.8);
+  }
+
+  function resetZoom() {
+    setZoom(1.0);
+  }
+
+  // Zoom button event listeners
+  qs('#zoomIn').addEventListener('click', zoomIn);
+  qs('#zoomOut').addEventListener('click', zoomOut);
+  qs('#zoomReset').addEventListener('click', resetZoom);
+
+  // Keyboard shortcuts for zoom
+  window.addEventListener('keydown', (e) => {
+    // Ctrl/Cmd + Plus/Equals for zoom in
+    if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+      e.preventDefault();
+      zoomIn();
+    }
+    // Ctrl/Cmd + Minus for zoom out
+    if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+      e.preventDefault();
+      zoomOut();
+    }
+    // Ctrl/Cmd + 0 for reset zoom
+    if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+      e.preventDefault();
+      resetZoom();
+    }
+  });
+
+  // Mouse wheel zoom (Ctrl + wheel)
+  canvas.addEventListener('wheel', (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        zoomIn();
+      } else {
+        zoomOut();
+      }
+    }
+  }, { passive: false });
+
   // Update undo to handle delete actions
   qs('#undo').addEventListener('click', () => {
     if (state.history.length === 0) return;
@@ -523,11 +607,11 @@
   async function loadLatestCapture() {
     const { latestCapture } = await chrome.storage.local.get('latestCapture');
     if (!latestCapture) return;
-    const { metrics, segments, tabTitle } = latestCapture;
+    const { metrics, segments, tabTitle, createdAt } = latestCapture;
     const stitched = await stitchSegments(segments, metrics);
-    const filename = tabTitle 
-      ? `${tabTitle.replace(/[^a-z0-9]/gi, '_').substring(0, 50)}-${Date.now()}.png`
-      : `fullpage-${new Date(latestCapture.createdAt).toISOString().slice(0,19).replace(/[:T]/g,'-')}.png`;
+    const ts = formatTimestamp(createdAt);
+    const titleSan = (tabTitle || 'page').replace(/[^a-z0-9]/gi, '_').substring(0, 50);
+    const filename = `${ts}-${titleSan}.png`;
     await addImageFromDataUrl(stitched, filename);
   }
 
@@ -536,11 +620,11 @@
     if (!batchCaptures || batchCaptures.length === 0) return;
     
     for (const capture of batchCaptures) {
-      const { metrics, segments, tabTitle } = capture;
+      const { metrics, segments, tabTitle, createdAt } = capture;
       const stitched = await stitchSegments(segments, metrics);
-      const filename = tabTitle 
-        ? `${tabTitle.replace(/[^a-z0-9]/gi, '_').substring(0, 50)}-${Date.now()}.png`
-        : `capture-${new Date(capture.createdAt).toISOString().slice(0,19).replace(/[:T]/g,'-')}.png`;
+      const ts = formatTimestamp(createdAt);
+      const titleSan = (tabTitle || 'page').replace(/[^a-z0-9]/gi, '_').substring(0, 50);
+      const filename = `${ts}-${titleSan}.png`;
       await addImageFromDataUrl(stitched, filename);
     }
     

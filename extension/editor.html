@@ -17,8 +17,8 @@
       </div>
       <div class="group">
         <label>Stroke width <input id="strokeWidth" type="number" value="4" min="1" max="64" /></label>
-        <label>Color <input id="color" type="color" value="#ff0000" /></label>
-        <label>Fill opacity <input id="fillOpacity" type="range" value="0.6" min="0" max="1" step="0.05" /></label>
+        <label>Color <input id="color" type="color" value="#000000" /></label>
+        <label>Fill opacity <input id="fillOpacity" type="range" value="1" min="0" max="1" step="0.05" /></label>
       </div>
       <div class="group">
         <label><input id="applyToAll" type="checkbox" /> Apply new shapes to all images</label>
@@ -29,6 +29,13 @@
       <div class="group">
         <button id="saveOne">Save current PNG</button>
         <button id="saveAll">Save all PNGs</button>
+      </div>
+      <div class="group">
+        <span class="separator">|</span>
+        <button id="zoomOut" title="Zoom out (Ctrl -)">🔍−</button>
+        <span id="zoomLevel">100%</span>
+        <button id="zoomIn" title="Zoom in (Ctrl +)">🔍+</button>
+        <button id="zoomReset" title="Reset zoom">Reset</button>
       </div>
     </header>
 
@@ -65,6 +72,7 @@
           <br>• <strong>Drag Mode:</strong> Click and drag shapes to move them
           <br>• <strong>Delete:</strong> Select a shape in Drag Mode and click Delete Shape
           <br>• Hold <kbd>Shift</kbd> for quick mode toggle
+          <br>• <strong>Zoom:</strong> Use <kbd>Ctrl +</kbd>/<kbd>Ctrl -</kbd> or mouse wheel to zoom
         </p>
       </div>
       <div id="thumbs" class="thumbs"></div>
